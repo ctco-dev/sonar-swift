@@ -18,6 +18,7 @@
 package com.backelite.sonarqube.swift.complexity;
 
 import com.backelite.sonarqube.commons.Constants;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.sonar.api.batch.fs.FileSystem;
 import org.sonar.api.batch.fs.InputFile;
@@ -36,19 +37,14 @@ public class LizardSensor implements Sensor {
     public static final String REPORT_PATH_KEY = Constants.PROPERTY_PREFIX + ".lizard.report";
     public static final String DEFAULT_REPORT_PATH = "sonar-reports/lizard-report.xml";
 
+    private final Logger logger = LoggerFactory.getLogger(getClass());
+
     private final Settings conf;
     private final FileSystem fileSystem;
 
     public LizardSensor(final FileSystem moduleFileSystem, final Settings config) {
         this.conf = config;
         this.fileSystem = moduleFileSystem;
-    }
-
-    private Map<String, List<Measure>> parseReportsIn(final String baseDir, LizardReportParser parser) {
-        final StringBuilder reportFileName = new StringBuilder(baseDir);
-        reportFileName.append("/").append(reportPath());
-        LoggerFactory.getLogger(getClass()).info("Processing complexity report ");
-        return parser.parseReport(new File(reportFileName.toString()));
     }
 
     private String reportPath() {
@@ -68,10 +64,18 @@ public class LizardSensor implements Sensor {
 
     @Override
     public void execute(SensorContext context) {
-
         final String projectBaseDir = fileSystem.baseDir().getPath();
-        Map<String, List<Measure>> measures = parseReportsIn(projectBaseDir, new LizardReportParser());
-        LoggerFactory.getLogger(getClass()).info("Saving results of complexity analysis");
-        new LizardMeasurePersistor(context, fileSystem).saveMeasures(measures);
+        final StringBuilder reportFileName = new StringBuilder(projectBaseDir);
+        reportFileName.append("/").append(reportPath());
+
+        File reportFile = new File(reportFileName.toString());
+        if (reportFile.exists()) {
+            logger.info("Processing Lizard complexity report");
+            Map<String, List<Measure>> measures = new LizardReportParser().parseReport(reportFile);
+            logger.info("Saving results of complexity analysis");
+            new LizardMeasurePersistor(context, fileSystem).saveMeasures(measures);
+        } else {
+            logger.info("Skipping Lizard complexity report as report file was not found");
+        }
     }
 }
